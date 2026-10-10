@@ -1,6 +1,10 @@
 package com.sahraflix.presentation.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.Card as MobileCard
+import androidx.compose.material3.CardDefaults as MobileCardDefaults
+import com.sahraflix.presentation.LocalUiEnvironment
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +35,14 @@ fun SahraFocusCard(
     content: @Composable BoxScope.() -> Unit
 ) {
     val shape = RoundedCornerShape(10.dp)
+    if (!LocalUiEnvironment.current.isTv) {
+        MobileCard(
+            modifier = modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            shape = shape,
+            colors = MobileCardDefaults.cardColors(containerColor = CinematicCharcoal)
+        ) { Box(Modifier.fillMaxSize(), content = content) }
+        return
+    }
     Card(
         onClick = onClick,
         onLongClick = onLongClick,

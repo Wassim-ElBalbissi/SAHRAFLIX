@@ -146,7 +146,12 @@ class Media3PlayerImpl @Inject constructor(
         val item = MediaItem.Builder()
             .setUri(request.url)
             .setMediaId(request.contentId)
-            .setMimeType(if (forceHls) MimeTypes.APPLICATION_M3U8 else mimeFor(request.url))
+            .setMimeType(if (forceHls) MimeTypes.APPLICATION_M3U8 else request.mimeType ?: mimeFor(request.url))
+            .setSubtitleConfigurations(request.subtitles.map { subtitle ->
+                MediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitle.url))
+                    .setMimeType(subtitle.mimeType).setLanguage(subtitle.language).setLabel(subtitle.label)
+                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT).build()
+            })
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(request.title)

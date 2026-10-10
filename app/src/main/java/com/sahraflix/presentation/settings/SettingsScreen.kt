@@ -60,9 +60,11 @@ import java.util.Date
 fun SettingsScreen(
     onPair: () -> Unit,
     onSubtitles: () -> Unit,
+    onSources: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val playlists by viewModel.playlistList.collectAsState()
+    val tmdbConfigured by viewModel.tmdbConfigured.collectAsState()
     val refresh by viewModel.refreshEnabled.collectAsState()
     val interval by viewModel.updateIntervalHours.collectAsState()
     val uiMode by viewModel.uiMode.collectAsState()
@@ -154,6 +156,8 @@ fun SettingsScreen(
         }
 
         // ── Updates ───────────────────────────────────────────────────────────
+        item { SettingsSection("Discovery & Sources") }
+        item { SettingsSurface { SettingsNavRow("Marquee sources", onSources, subtitle = "Providers, TMDB, subtitles, debrid and Stremio addons") } }
         item { SettingsSection("Updates") }
         item {
             SettingsSurface {
@@ -210,12 +214,12 @@ fun SettingsScreen(
                 HorizontalDivider(color = SlateDivider, thickness = 0.5.dp)
                 SettingsInfoRow(
                     title = "TMDB",
-                    value = if (viewModel.tmdbConfigured) "Configured" else "Not configured"
+                    value = if (tmdbConfigured) "Configured" else "Not configured"
                 )
             }
         }
         item {
-            val tmdbNote = if (!viewModel.tmdbConfigured) " Add TMDB_API_KEY to local.properties to enable." else ""
+            val tmdbNote = if (!tmdbConfigured) " Add your TMDB API key in Source settings to enable discovery." else ""
             SahraText(
                 "SahraFlix plays IPTV sources you provide. Movie & series info, artwork and \"where to watch\" data " +
                     "come from TMDB.$tmdbNote This product uses the TMDB API but is not endorsed or certified by TMDB.",

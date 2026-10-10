@@ -35,9 +35,12 @@ import com.sahraflix.presentation.player.LocalPlayerViewModel
 fun HomeScreen(
     onOpenDetail: (CatalogEntry) -> Unit,
     onAddPlaylist: () -> Unit,
+    onResumeSource: (String) -> Unit,
+    onSources: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val player = LocalPlayerViewModel.current
+    val tmdbConfigured by viewModel.tmdbConfigured.collectAsState()
     val isOnline by viewModel.isOnline.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
@@ -81,7 +84,7 @@ fun HomeScreen(
             EntryRail(
                 title = "Continue watching",
                 entries = continueWatching.map { it.entry },
-                onClick = { player.resume(it.id) },
+                onClick = { if (it.id.startsWith("tmdb-")) onResumeSource(it.id) else player.resume(it.id) },
                 progress = { e -> continueWatching.firstOrNull { it.entry.id == e.id }?.progress }
             )
         }
@@ -89,11 +92,14 @@ fun HomeScreen(
         item(key = "series") { PagedRail("Series", series, open) }
         item(key = "tm") { PagedRail("Trending movies", trendingMovies, open) }
         item(key = "ts") { PagedRail("Trending series", trendingSeries, open) }
-        if (!viewModel.tmdbConfigured) item(key = "tmdb-hint") {
+        if (!tmdbConfigured) item(key = "tmdb-hint") {
             Text(
-                "Tip: add a free TMDB API key (see README) to get trending titles, artwork, cast, trailers and \"where to watch\".",
+                "Add your TMDB API key in Source settings to browse titles and search Marquee sources.",
                 style = MaterialTheme.typography.bodySmall
             )
+            com.sahraflix.presentation.components.SahraButton(onClick = onSources) {
+                com.sahraflix.presentation.components.SahraText("Source settings")
+            }
         }
         if (playlists?.isNotEmpty() == true) item(key = "hint") {
             Text("Long-press a channel to add it to favourites. Menu key in the player opens audio/subtitle options.",

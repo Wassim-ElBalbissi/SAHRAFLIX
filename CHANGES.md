@@ -1,4 +1,17 @@
-# SahraFlix 2.0: what changed and why
+# SahraFlix change history
+
+## October 2026 continuation
+
+- Added 17 Marquee connectors and Stremio stream/subtitle addons with an isolated bundled JavaScript runtime and Android adapters.
+- Added source settings, encrypted API keys, episode/source selection, external subtitles and fresh-link resolution when resuming.
+- Direct streams play through Media3; torrents open an external app. Desktop plugin/local-folder features are not included.
+- Restored the TV guide. IPTV movies and series open details; similar/library cards navigate correctly. Top-level navigation returns to the destination root.
+- Added Xtream movie plot/cast/director details, optional TMDB enrichment and safer authentication/expiry handling.
+- Corrected Arabic/Turkish matching, numeric titles and false sequel matches. Fixed encoded detail IDs, mobile categories and touch cards.
+- Added migration, provider, navigation, source bridge and subtitle tests, connector fixtures, and CI build/test/lint checks.
+- Removed HTTP request logging because provider/addon URLs can contain credentials.
+
+## Original 2.0 rebuild
 
 ## Build blockers (the previous version could not compile)
 - `NetworkMonitor` was imported by HomeViewModel but did not exist → added `core/NetworkMonitor`.

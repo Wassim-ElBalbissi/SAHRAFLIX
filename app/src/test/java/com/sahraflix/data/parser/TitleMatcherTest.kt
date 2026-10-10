@@ -15,8 +15,24 @@ class TitleMatcherTest {
     @Test fun rejectsSequelsWrongYearsAndSubstrings() {
         assertTrue(TitleMatcher.score("The Matrix", 1999, "The Matrix Reloaded (2003)") < 80)
         assertTrue(TitleMatcher.score("Dune", 2021, "Dune (1984)") < 80)
+        assertTrue(TitleMatcher.score("The Matrix", 1999, "The Matrix Reloaded (1999)") < 80)
         assertEquals(0, TitleMatcher.score("Up", 2009, "Upgrade (2018)"))
     }
 
     @Test fun searchFragmentIsLongestWord() = assertEquals("rings", TitleMatcher.searchFragment("The Lord of the Rings"))
+
+    @Test fun preservesArabicAndTurkishTitles() {
+        assertTrue(TitleMatcher.score("قيامة عثمان", 2019, "AR - قِيَامَة عُثْمَان (2019) HD") >= 80)
+        assertTrue(TitleMatcher.score("Kuruluş Osman", 2019, "TR - Kurulus Osman (2019) FHD") >= 80)
+        assertEquals("قيامة", TitleMatcher.searchFragment("قيامة عثمان"))
+        assertEquals(0, TitleMatcher.score("قيامة عثمان", null, "قيامة أرطغرل"))
+    }
+
+    @Test fun preservesNumericTitles() {
+        assertTrue(TitleMatcher.score("1917", 2019, "1917 (2019) HD") >= 80)
+        assertTrue(TitleMatcher.score("1899", null, "1899 HD") >= 80)
+        assertEquals(null, TitleMatcher.parse("1917").year)
+        assertTrue(TitleMatcher.score("2001: A Space Odyssey", 1968, "2001: A Space Odyssey HD") >= 80)
+        assertTrue(TitleMatcher.score("1917", 2019, "1917 (2020)") < 80)
+    }
 }

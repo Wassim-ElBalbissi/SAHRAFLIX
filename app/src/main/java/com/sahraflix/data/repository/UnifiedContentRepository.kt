@@ -25,6 +25,7 @@ import com.sahraflix.domain.model.StreamType
 import com.sahraflix.domain.repository.ContentRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.CancellationException
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -95,29 +96,39 @@ class UnifiedContentRepository @Inject constructor(
     override suspend fun iptvDetails(streamId: String): ContentDetails.Iptv {
         val entity = streamDao.getById(streamId) ?: throw NoSuchElementException("This item is no longer in your playlist")
         val entry = entity.toEntry()
+        val playlist = playlistDao.getById(entity.playlistId)
         
         var tmdbFull: ContentDetails.Tmdb? = null
-        if (entity.streamType == StreamType.MOVIE || entity.streamType == StreamType.SERIES) {
-            val fragment = TitleMatcher.searchFragment(entity.name)
+        if (tmdb.isConfigured && entity.streamType != StreamType.LIVE) {
+            val fragment = TitleMatcher.searchFragment(TitleMatcher.parse(entity.name).key)
             if (fragment.length >= 2) {
-                val match = searchTmdb(fragment).firstOrNull { it.isSeries == (entity.streamType == StreamType.SERIES) }
+                val match = optionalMetadata { searchTmdb(fragment) }.orEmpty()
+                    .filter { it.isSeries == (entity.streamType == StreamType.SERIES) }
+                    .map { it to TitleMatcher.score(it.title, it.releaseYear, entity.name) }
+                    .filter { it.second >= 80 }
+                    .maxByOrNull { it.second }?.first
                 if (match != null) {
-                    tmdbFull = runCatching { tmdbDetails(match.tmdbId, match.isSeries) }.getOrNull()
+                    tmdbFull = optionalMetadata { tmdbDetails(match.tmdbId, match.isSeries) }
                 }
             }
         }
 
         if (entity.streamType != StreamType.SERIES) {
+            val info = if (entity.streamType == StreamType.MOVIE && playlist?.type == PlaylistType.XTREAM && entity.providerId != null) {
+                optionalMetadata { xtream.movieInfo(playlist, entity.providerId) }
+            } else null
             return ContentDetails.Iptv(
-                entry = entry, 
-                description = tmdbFull?.description, 
-                backdropUrl = tmdbFull?.backdropUrl,
-                rating = tmdbFull?.rating,
-                releaseYear = tmdbFull?.releaseYear,
-                tmdbMatch = tmdbFull
+                entry = entry.copy(stream = entry.stream.copy(logoUrl = info?.poster ?: entry.posterUrl)),
+                description = info?.plot ?: tmdbFull?.description,
+                backdropUrl = info?.backdrop ?: tmdbFull?.backdropUrl,
+                rating = info?.rating ?: tmdbFull?.rating,
+                releaseYear = info?.year ?: tmdbFull?.releaseYear,
+                tmdbMatch = tmdbFull,
+                cast = info?.cast,
+                director = info?.director
             )
         }
-        val playlist = playlistDao.getById(entity.playlistId) ?: return ContentDetails.Iptv(
+        if (playlist == null) return ContentDetails.Iptv(
             entry, tmdbFull?.description, tmdbFull?.backdropUrl, emptyMap(), tmdbFull?.rating, tmdbFull?.releaseYear, tmdbFull
         )
         if (playlist.type != PlaylistType.XTREAM || entity.providerId == null) {
@@ -147,11 +158,11 @@ class UnifiedContentRepository @Inject constructor(
     override suspend fun tmdbDetails(tmdbId: Int, isSeries: Boolean): ContentDetails.Tmdb {
         return if (isSeries) {
             val tv = tmdb.tv(tmdbId)
-            val similarTv = tmdb.similarTv(tmdbId)
+            val similarTv = optionalMetadata { tmdb.similarTv(tmdbId) }
             val entry = CatalogEntry.Tmdb(tv.id, tv.name.orEmpty(), tmdb.image(tv.poster_path), true, tv.overview,
                 tmdb.year(tv.first_air_date), tv.vote_average, tmdb.image(tv.backdrop_path, AppConfig.TMDB_IMAGE_BACKDROP))
             
-            val similarEntries = similarTv.results.mapNotNull {
+            val similarEntries = similarTv?.results.orEmpty().map {
                 CatalogEntry.Tmdb(it.id, it.name.orEmpty(), tmdb.image(it.poster_path), true, it.overview,
                     tmdb.year(it.first_air_date), it.vote_average)
             }
@@ -162,11 +173,11 @@ class UnifiedContentRepository @Inject constructor(
                 libraryMatches(entry.title, null, StreamType.SERIES), similarEntries)
         } else {
             val m = tmdb.movie(tmdbId)
-            val similarMovies = tmdb.similarMovies(tmdbId)
+            val similarMovies = optionalMetadata { tmdb.similarMovies(tmdbId) }
             val entry = CatalogEntry.Tmdb(m.id, m.title.orEmpty(), tmdb.image(m.poster_path), false, m.overview,
                 tmdb.year(m.release_date), m.vote_average, tmdb.image(m.backdrop_path, AppConfig.TMDB_IMAGE_BACKDROP))
                 
-            val similarEntries = similarMovies.results.mapNotNull {
+            val similarEntries = similarMovies?.results.orEmpty().map {
                 CatalogEntry.Tmdb(it.id, it.title.orEmpty(), tmdb.image(it.poster_path), false, it.overview,
                     tmdb.year(it.release_date), it.vote_average)
             }
@@ -179,6 +190,14 @@ class UnifiedContentRepository @Inject constructor(
     }
 
     /** Finds this title in the user's own IPTV VOD library. */
+    private suspend fun <T> optionalMetadata(load: suspend () -> T): T? = try {
+        load()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        null // Artwork/recommendations must never prevent access to an IPTV episode or movie.
+    }
+
     private suspend fun libraryMatches(title: String, year: Int?, type: StreamType): List<CatalogEntry.Iptv> {
         val fragment = TitleMatcher.searchFragment(title)
         if (fragment.length < 2) return emptyList()

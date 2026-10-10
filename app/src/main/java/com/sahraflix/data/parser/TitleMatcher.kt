@@ -1,6 +1,7 @@
 package com.sahraflix.data.parser
 
 import java.text.Normalizer
+import java.util.Locale
 
 /**
  * Matches TMDB titles against IPTV VOD names, which are typically decorated:
@@ -19,19 +20,23 @@ object TitleMatcher {
     fun parse(raw: String): Parsed {
         var s = raw
         repeat(2) { s = PREFIX.replace(s, "") }
-        val year = YEAR.findAll(s).lastOrNull()?.value?.toIntOrNull()
-        s = s.replace(Regex("""[\[(][^\])]*[\])]"""), " ")   // (1999) [4K] etc.
-        s = YEAR.replace(s, " ")
-        s = NOISE.replace(s, " ")
-        return Parsed(normalize(s), year)
+        val decorated = s
+        // Only strip the final year when a title remains (1917 and 1899 are titles too).
+        fun clean(raw: String) = normalize(NOISE.replace(raw.replace(Regex("""[\[(][^\])]*[\])]"""), " "), " "))
+        val yearMatch = YEAR.findAll(s).lastOrNull()?.takeIf { clean(s.substring(it.range.last + 1)).isEmpty() }
+        val withoutYear = clean(yearMatch?.let { s.removeRange(it.range) } ?: s)
+        val title = withoutYear.ifBlank { clean(decorated) }
+        val year = yearMatch?.value?.toIntOrNull()?.takeIf { withoutYear.isNotEmpty() }
+        return Parsed(title, year)
     }
 
     fun normalize(value: String): String {
-        val ascii = Normalizer.normalize(value, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
-        return ascii.lowercase()
+        // Adapted from Marquee's Unicode-aware matching: retain every script, fold accents.
+        val folded = Normalizer.normalize(value, Normalizer.Form.NFKD).replace(Regex("\\p{Mn}+"), "")
+        return folded.lowercase(Locale.ROOT)
             .replace("&", " and ")
             .replace(Regex("""^(the|a|an)\s+"""), "")
-            .replace(Regex("[^a-z0-9]+"), " ")
+            .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
             .trim()
             .replace(Regex("""^(the|a|an)\s+"""), "")
     }
@@ -43,7 +48,6 @@ object TitleMatcher {
         if (want.isEmpty() || got.key.isEmpty()) return 0
         var score = when {
             got.key == want -> 90
-            got.key.startsWith("$want ") || got.key.endsWith(" $want") -> 70
             else -> return 0
         }
         if (tmdbYear != null && got.year != null) score += if (tmdbYear == got.year) 10 else -40

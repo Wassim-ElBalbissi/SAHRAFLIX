@@ -1,6 +1,7 @@
 package com.sahraflix.presentation.theme
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -57,10 +58,16 @@ private val Type = TvTypography(
 fun SahraflixTheme(content: @Composable () -> Unit) {
     val env = LocalUiEnvironment.current
     M3Theme(colorScheme = M3Colors) {
-        if (env.isTv) {
-            TvTheme(colorScheme = TvColors, typography = Type, content = content)
-        } else {
-            content()
+        // Screens use a cinematic Box background rather than Surface, so supply its text colour.
+        CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides TextPrimary,
+            androidx.tv.material3.LocalContentColor provides TextPrimary
+        ) {
+            if (env.isTv) {
+                TvTheme(colorScheme = TvColors, typography = Type, content = content)
+            } else {
+                content()
+            }
         }
     }
 }

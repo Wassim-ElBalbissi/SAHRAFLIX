@@ -1,73 +1,78 @@
-# SahraFlix 2.0
+# SahraFlix
 
-An Android TV–first IPTV player (Compose for TV, Media3/ExoPlayer, Room, Paging 3, Hilt, WorkManager)
-for **your own** IPTV subscriptions (M3U, Xtream Codes, Stalker/Ministra portals), with a TMDB-powered
-discovery layer that shows artwork, cast, trailers and **where each title is legally available**.
+Android TV and phone player built with Compose, Media3, Room, Paging, Hilt and WorkManager. Supports IPTV subscriptions and movie/episode discovery with sources adapted from [Marquee](https://github.com/Wassim-ElBalbissi/Marquee).
 
 ## Features
-- **Sources:** M3U/M3U8 (incl. gzip, `#EXTVLCOPT` user-agent/referrer, `#EXTGRP`, `tvg-*`, catch-up attributes),
-  Xtream Codes (auth/expiry check, categories, live/VOD/series, `get_series_info` episodes, `xmltv.php` guide,
-  timeshift), Stalker portals (handshake → token → channels, on-demand `create_link`).
-- **Setup:** type it on the TV, pair from a phone by QR code (PIN-protected, single-use, lockout), or one-press demo server.
-- **Player:** shared OkHttp stack (http↔https redirects, per-stream headers), decoder fallback, automatic
-  reconnect with backoff, live-window recovery, HLS fallback for extension-less links, audio/subtitle/quality
-  selection, speed, aspect modes, external subtitles, PiP (API 26+), media session / notification controls,
-  actionable error messages, "open in external player" (VLC/MX).
-- **Home:** Continue watching (resume), favourite channels (long-press), On now (EPG), Live TV, Movies, Series,
-  Trending movies & series (TMDB).
-- **TV guide:** 8-hour grid (2 h back for catch-up), jump to live, play archived programmes.
-- **Search:** channels, VOD, guide programmes and TMDB titles in one place.
-- **Library matching:** a TMDB title page finds matching movies in your own IPTV VOD library ("Play from your library").
-- **Background sync:** WorkManager, stale-channel cleanup, per-playlist status & error messages, configurable interval.
-- **Profiles:** optional per-profile PIN (Android Keystore HMAC).
 
-## Build
-Requirements: Android Studio (Ladybug or newer), JDK 17, Android SDK 36.
+- M3U/M3U8, Xtream Codes and Stalker live TV; per-stream headers, catch-up and XMLTV guide.
+- Xtream movie metadata and episode navigation, including when TMDB is unavailable.
+- TMDB discovery, cast, trailers, similar titles, library matching and watch-provider information.
+- **17 Marquee connectors:** Krmzy, 3isq, 3isk, Qrmzi, Prstej, MyCima, Qisat, Movish, VixSrc, Boredflix, Embed Mirrors, Embed Relays, HydraHD, Anikoto, Reanime, OpenSubtitles and Torrentio.
+- User-added Stremio stream/subtitle addons and individual source switches.
+- Progressive results, season/episode selection and optional Arabic, Turkish or English subtitles.
+- Direct HTTP/HLS/debrid streams play through Media3 with source headers. Torrent results open an installed torrent app.
+- Continue Watching resolves fresh links for source titles before resuming. IPTV history and favourites remain available.
+- Phone pairing, encrypted settings, profile PINs, background sync, audio/subtitle selection, PiP and external players.
 
-1. Open the project and let Gradle sync.
-2. *(Optional)* Get a free TMDB key at https://www.themoviedb.org/settings/api and add to `local.properties`:
-   ```
-   TMDB_API_KEY=your_v3_key_or_v4_read_token
-   ```
-3. Run on an Android TV emulator (API 30+ recommended) or device.
+## Setup
 
-> **Note on versions.** Dependency versions were checked against upstream tags in Sept 2026, but this
-> rebuild was written without access to Google's Maven repository, so it has **not been compiled yet**.
-> Expect to fix a handful of small API mismatches on first build; Android Studio's upgrade assistant
-> will flag them. Room schema JSONs are exported to `app/schemas/` on first build.
+1. Choose TV or mobile layout and create/select a profile.
+2. For IPTV, use **Settings → Add playlist** or pair from a phone.
+3. Open **Settings → Marquee sources** and enter your own TMDB key or read token to enable discovery. OpenSubtitles and debrid keys are optional.
+4. Open a discovery/search title, then **Find streams** or **Choose episode & sources**.
+
+Keys are stored in encrypted preferences. No Marquee account credentials or API keys are bundled. A build-time TMDB key in `local.properties` (`TMDB_API_KEY=...`) remains supported. Get your key from [TMDB](https://www.themoviedb.org/settings/api).
+
+## Build and verify
+
+Requires JDK 17 and Android SDK 36. Open in Android Studio or run:
+
+```sh
+./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+./gradlew :app:connectedDebugAndroidTest  # running emulator/device required
+```
+
+On Windows use `gradlew.bat`. The APK is `app/build/outputs/apk/debug/app-debug.apk`.
+
+The generated source bundle is committed, so ordinary Android builds do not require Node. After editing its TypeScript:
+
+```sh
+cd tools/marquee-sources
+npm ci
+npm test
+```
+
+CI checks bundle reproducibility, connector fixtures, Android compilation, unit tests and lint. Instrumentation tests cover Room migration 7→8, Xtream metadata/authentication, navigation, the real WebView source bridge, browser isolation and subtitles. Local fixtures verify integration; they do not certify current availability of third-party hosts.
 
 ## Test server
-```bash
-python3 tools/test-server/server.py
-```
-Then in the app: **Settings → Add demo server** (emulator), or add Xtream `http://<LAN-IP>:8000`, `demo`/`demo`.
-See [tools/test-server/README.md](tools/test-server/README.md).
 
-## Tests
-- JVM unit tests (`./gradlew test`): M3U parser, catch-up URL formatter, XMLTV time parsing, title matcher.
-  These were compiled with kotlinc 2.2.21 and pass (17/17), including an end-to-end run against the test server.
-- Room migration 7→8 should be verified with `MigrationTestHelper` on a device once the schema JSONs exist.
+```sh
+python tools/test-server/server.py
+```
+
+Use **Settings → Add demo server** on the emulator, or Xtream `http://<LAN-IP>:8000` with `demo` / `demo` on a device. See [test server instructions](tools/test-server/README.md).
 
 ## Architecture
-```
-presentation/  Compose screens + ViewModels (PlayerViewModel is activity-scoped, shared via LocalPlayerViewModel)
-domain/        models + repository contracts
-data/
-  parser/      pure-Kotlin M3U parser, title matcher (unit-tested)
-  repository/  M3U / Xtream / Stalker providers, PlaylistSyncer, XMLTV sync, catch-up formatter
-  local/       Room v8 (upserts, sync generations, playlist-scoped EPG)
-  remote/      TMDB API (metadata, watch providers, videos)
-  worker/      playlist + TMDB WorkManager jobs
-player/        Media3 implementation, MediaSessionService, PiP actions
-tools/test-server/  mock Xtream/M3U/XMLTV server
+
+```text
+app/src/main/java/com/sahraflix/
+  presentation/    Compose screens and ViewModels
+  domain/          models and repository contracts
+  data/local/      Room v8 and encrypted preferences
+  data/repository/ IPTV providers and unified catalogue
+  data/sources/    Marquee runtime, HTTP/browser and subtitle adapters
+  data/remote/     TMDB API
+  player/          Media3, media session and PiP
 ```
 
-## Content & legal
-SahraFlix is a player. It ships **no channels or content** and contains no scrapers for unlicensed
-streaming sites. You are responsible for the sources you add. TMDB is used for metadata only; watch-provider
-data is supplied by JustWatch via TMDB. *This product uses the TMDB API but is not endorsed or certified by TMDB.*
+See [source provenance and port details](tools/marquee-sources/README.md) and [change history](CHANGES.md).
 
-## Known limitations
-- Stalker portals: live TV only (VOD/series catalogues are not synced).
-- Xtream `get_vod_info` metadata (plot/cast per movie) is not fetched yet; TMDB covers movie details.
-- Catch-up relies on provider support (`tv_archive`, `catchup-source`, or `catchup="shift"`).
+## Limitations
+
+- Source domains, anti-bot challenges and availability can change. No results does not mean a title is unavailable everywhere.
+- Source search needs an enabled, current Android System WebView. Provider pages have no native bridge. IPTV playback does not need WebView.
+- Desktop Marquee's local-folder scanner, arbitrary plugins and embedded torrent engine are not included. Magnet playback requires another app; debrid HTTP links play here.
+- Stalker portals currently support live TV only. Catch-up depends on the provider.
+- Real subscription/debrid credentials and physical TV/phone compatibility require testing on the target device.
+
+SahraFlix distributes no media files. Use sources you are entitled to access. TMDB supplies metadata, with watch-provider information from JustWatch. This product uses the TMDB API but is not endorsed or certified by TMDB.

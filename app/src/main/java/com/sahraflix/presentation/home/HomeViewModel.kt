@@ -41,10 +41,11 @@ class HomeViewModel @Inject constructor(
     streamDao: StreamDao,
     epgDao: EpgDao,
     playlistRepository: PlaylistRepository,
-    networkMonitor: NetworkMonitor
+    networkMonitor: NetworkMonitor,
+    sources: com.sahraflix.data.sources.SourcePreferences
 ) : ViewModel() {
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
-    val tmdbConfigured = BuildConfig.TMDB_API_KEY.isNotBlank()
+    val tmdbConfigured = sources.tmdbConfigured.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), sources.tmdbKey.isNotBlank())
 
     val playlists: StateFlow<List<PlaylistEntity>?> = playlistRepository.playlists
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)

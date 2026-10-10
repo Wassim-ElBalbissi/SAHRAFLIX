@@ -91,13 +91,13 @@ class XtreamProviderImpl @Inject constructor(
             throw IOException("This doesn't look like an Xtream Codes server (unexpected response).")
         }
         val user = root.optJSONObject("user_info") ?: throw IOException("Login failed: invalid username or password.")
-        if (user.optInt("auth", 1) == 0) throw IOException("Login failed: invalid username or password.")
+        if (user.optInt("auth", 0) != 1) throw IOException("Login failed: invalid username or password.")
         val status = user.optString("status")
         if (status.isNotBlank() && !status.equals("Active", ignoreCase = true)) {
             throw IOException("Account status is \"$status\". Contact your provider.")
         }
         user.optString("exp_date").toLongOrNull()?.let { exp ->
-            if (exp * 1000 < System.currentTimeMillis()) throw IOException("Your subscription has expired.")
+            if (exp > 0 && exp < System.currentTimeMillis() / 1000) throw IOException("Your subscription has expired.")
         }
         val formats = user.optJSONArray("allowed_output_formats")?.let { arr -> (0 until arr.length()).map { arr.optString(it) } }.orEmpty()
         // HLS reconnects cleanly after network blips; fall back to MPEG-TS when the panel disallows it.
@@ -145,6 +145,35 @@ class XtreamProviderImpl @Inject constructor(
     }
 
     data class SeriesInfo(val plot: String?, val backdrop: String?, val rating: Double?, val year: Int?, val episodes: List<IptvEpisode>)
+
+    /** Provider metadata also works when the optional TMDB key has not been configured. */
+    suspend fun movieInfo(playlist: PlaylistEntity, providerId: String): MovieInfo = withContext(Dispatchers.IO) {
+        val acc = account(playlist)
+        val root = JSONObject(get(acc, acc.api("get_vod_info", "vod_id" to providerId)))
+        val info = root.optJSONObject("info")
+        val movie = root.optJSONObject("movie_data")
+        MovieInfo(
+            plot = info.text("plot") ?: info.text("description"),
+            backdrop = (info?.optJSONArray("backdrop_path")?.optString(0) ?: info.text("backdrop_path"))
+                ?.takeIf { it.toHttpUrlOrNull() != null },
+            poster = (info.text("movie_image") ?: info.text("cover_big") ?: movie.text("stream_icon"))
+                ?.takeIf { it.toHttpUrlOrNull() != null },
+            rating = info.text("rating")?.toDoubleOrNull()?.takeIf { it.isFinite() && it in 0.0..10.0 },
+            year = (info.text("releasedate") ?: info.text("releaseDate") ?: info.text("release_date")
+                ?: info.text("year"))?.take(4)?.toIntOrNull(),
+            cast = info.text("cast") ?: info.text("actors"),
+            director = info.text("director")
+        )
+    }
+
+    data class MovieInfo(
+        val plot: String?, val backdrop: String?, val poster: String?, val rating: Double?,
+        val year: Int?, val cast: String?, val director: String?
+    )
+
+    private fun JSONObject?.text(key: String): String? = this?.opt(key)
+        ?.takeIf { it is String || it is Number }?.toString()?.trim()
+        ?.takeIf { it.isNotEmpty() && !it.equals("null", true) }
 
     private fun fetchCategories(acc: Account, action: String): Map<String, String> {
         val body = runCatching { get(acc, acc.api(action)) }.getOrNull() ?: return emptyMap()

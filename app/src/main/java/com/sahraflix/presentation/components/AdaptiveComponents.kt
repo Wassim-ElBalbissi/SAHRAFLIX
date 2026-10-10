@@ -1,11 +1,10 @@
 package com.sahraflix.presentation.components
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.Text
+import androidx.compose.material3.Button as MobileButton
+import androidx.compose.material3.Card as MobileCard
+import androidx.compose.material3.Text as MobileText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -34,13 +33,13 @@ fun SahraCard(
         val interactionSource = remember { MutableInteractionSource() }
         Card(
             onClick = onClick,
-            modifier = modifier.focusable(interactionSource = interactionSource),
+            modifier = modifier,
             interactionSource = interactionSource
         ) {
             content()
         }
     } else {
-        Card(
+        MobileCard(
             onClick = onClick,
             modifier = modifier
         ) {
@@ -60,14 +59,14 @@ fun SahraButton(
         val interactionSource = remember { MutableInteractionSource() }
         Button(
             onClick = onClick,
-            modifier = modifier.focusable(interactionSource = interactionSource),
+            modifier = modifier,
             enabled = enabled,
             interactionSource = interactionSource
         ) {
             content()
         }
     } else {
-        Button(
+        MobileButton(
             onClick = onClick,
             modifier = modifier,
             enabled = enabled
@@ -116,7 +115,7 @@ fun SahraText(
             style = style
         )
     } else {
-        Text(
+        MobileText(
             text = text,
             modifier = modifier,
             color = color,

@@ -1,0 +1,47 @@
+name: Android
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tools/marquee-sources/package-lock.json
+      - name: Verify source bundle and connector fixtures
+        working-directory: tools/marquee-sources
+        run: |
+          npm ci
+          npm test
+          git diff --exit-code -- ../../app/src/main/assets/marquee-runtime.js
+      - name: Build, unit tests, and lint
+        run: bash gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --console=plain
+      - name: Test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports
+          path: app/build/reports/
+          retention-days: 7
+      - name: Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sahraflix-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7

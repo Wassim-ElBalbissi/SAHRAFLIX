@@ -77,6 +77,10 @@ class PlayerViewModel @Inject constructor(
     fun playEpisode(series: CatalogEntry.Iptv, episode: IptvEpisode) =
         launchPlayback { repository.playRequest(series, episode) }
 
+    fun playResolved(request: PlayRequest) = launchPlayback {
+        request.copy(resumePositionMs = dashboardDao.getProgress(request.contentId)?.positionMs ?: 0L)
+    }
+
     fun playCatchup(streamId: String, startMs: Long, endMs: Long) = launchPlayback {
         repository.catchupRequest(streamId, startMs, endMs)
             ?: throw IllegalStateException("Catch-up isn't available for this channel")

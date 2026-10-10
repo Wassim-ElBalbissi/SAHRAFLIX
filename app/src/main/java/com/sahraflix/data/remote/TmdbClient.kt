@@ -11,10 +11,12 @@ import java.io.IOException
 import java.util.Locale
 
 class TmdbNotConfiguredException : IllegalStateException(
-    "TMDB is not configured. Add TMDB_API_KEY to local.properties to enable movie & series discovery."
+    "Add your TMDB API key in Source settings to enable movie and series discovery."
 )
 
-class TmdbClient(private val api: TmdbApi, val isConfigured: Boolean) {
+class TmdbClient(private val api: TmdbApi, private val configured: () -> Boolean) {
+    constructor(api: TmdbApi, isConfigured: Boolean) : this(api, { isConfigured })
+    val isConfigured: Boolean get() = configured()
 
     private val language: String get() = Locale.getDefault().toLanguageTag()
     val region: String get() = Locale.getDefault().country.ifBlank { "US" }
@@ -24,6 +26,7 @@ class TmdbClient(private val api: TmdbApi, val isConfigured: Boolean) {
     suspend fun search(query: String) = request { api.searchMulti(query, 1, language) }
     suspend fun movie(id: Int) = request { api.movie(id, language) }
     suspend fun tv(id: Int) = request { api.tv(id, language) }
+    suspend fun season(id: Int, season: Int) = request { api.season(id, season, language) }
     suspend fun similarMovies(id: Int) = request { api.similarMovies(id = id, language = language) }
     suspend fun similarTv(id: Int) = request { api.similarTv(id = id, language = language) }
 
