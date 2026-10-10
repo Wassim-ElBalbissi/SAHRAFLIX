@@ -25,15 +25,19 @@ interface TmdbApi {
     suspend fun movie(
         @Path("id") id: Int,
         @Query("language") language: String,
-        @Query("append_to_response") append: String = "credits,videos,watch/providers"
+        @Query("append_to_response") append: String = "credits,videos,watch/providers,external_ids"
     ): Response<TmdbMovieDto>
 
     @GET("tv/{id}")
     suspend fun tv(
         @Path("id") id: Int,
         @Query("language") language: String,
-        @Query("append_to_response") append: String = "credits,videos,watch/providers"
+        @Query("append_to_response") append: String = "credits,videos,watch/providers,external_ids"
     ): Response<TmdbTvDto>
+
+    @GET("tv/{id}/season/{season}")
+    suspend fun season(@Path("id") id: Int, @Path("season") season: Int,
+        @Query("language") language: String): Response<TmdbSeasonDetailsDto>
 
     @GET("movie/{id}/similar")
     suspend fun similarMovies(
@@ -56,6 +60,9 @@ data class TmdbPageDto<T>(val page: Int = 1, val total_pages: Int = 1, val resul
 data class TmdbMovieDto(
     val id: Int,
     val title: String? = null,
+    val original_title: String? = null,
+    val original_language: String? = null,
+    val imdb_id: String? = null,
     val overview: String? = null,
     val poster_path: String? = null,
     val backdrop_path: String? = null,
@@ -71,6 +78,10 @@ data class TmdbMovieDto(
 data class TmdbTvDto(
     val id: Int,
     val name: String? = null,
+    val original_name: String? = null,
+    val original_language: String? = null,
+    val origin_country: List<String> = emptyList(),
+    val external_ids: TmdbExternalIdsDto? = null,
     val overview: String? = null,
     val poster_path: String? = null,
     val backdrop_path: String? = null,
@@ -94,6 +105,9 @@ data class TmdbSeasonDto(
 )
 
 data class TmdbGenreDto(val id: Int, val name: String)
+data class TmdbExternalIdsDto(val imdb_id: String? = null)
+data class TmdbSeasonDetailsDto(val episodes: List<TmdbEpisodeDto> = emptyList())
+data class TmdbEpisodeDto(val id: Int, val episode_number: Int, val name: String?, val air_date: String? = null)
 data class TmdbCreditsDto(val cast: List<TmdbCastDto> = emptyList())
 data class TmdbCastDto(val id: Int, val name: String, val character: String? = null, val profile_path: String? = null)
 data class TmdbVideosDto(val results: List<TmdbVideoDto> = emptyList())

@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.net.URLDecoder
 import javax.inject.Inject
 
 sealed interface DetailState {
@@ -26,7 +25,8 @@ class DetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: ContentRepository
 ) : ViewModel() {
-    private val id: String = URLDecoder.decode(savedStateHandle.get<String>("id").orEmpty(), "UTF-8")
+    // Navigation has already decoded the route argument; decoding again corrupts '+' and '%' IDs.
+    private val id: String = savedStateHandle.get<String>("id").orEmpty()
     private val _state = MutableStateFlow<DetailState>(DetailState.Loading)
     val state: StateFlow<DetailState> = _state.asStateFlow()
 

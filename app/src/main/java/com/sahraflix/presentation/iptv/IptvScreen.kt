@@ -4,7 +4,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -55,6 +55,8 @@ import coil.compose.AsyncImage
 import com.sahraflix.domain.model.CatalogEntry
 import com.sahraflix.presentation.components.SahraFocusCard
 import com.sahraflix.presentation.components.SahraText
+import com.sahraflix.presentation.components.SahraButton
+import com.sahraflix.presentation.LocalUiEnvironment
 import com.sahraflix.presentation.components.StreamCard
 import com.sahraflix.presentation.player.LocalPlayerViewModel
 import com.sahraflix.presentation.theme.AbyssBlue
@@ -69,6 +71,7 @@ import com.sahraflix.presentation.theme.VoidBlack
 
 @Composable
 fun IptvScreen(
+    onOpenDetail: (CatalogEntry) -> Unit,
     viewModel: IptvViewModel = hiltViewModel()
 ) {
     val categories by viewModel.categories.collectAsState()
@@ -76,10 +79,12 @@ fun IptvScreen(
     val selectedTab by viewModel.selectedTab.collectAsState()
     val channels = viewModel.channels.collectAsLazyPagingItems()
     val player = LocalPlayerViewModel.current
+    val isTv = LocalUiEnvironment.current.isTv
 
     Row(modifier = Modifier.fillMaxSize().background(VoidBlack)) {
-        CategorySidebar(
+        if (isTv) CategorySidebar(
             categories = categories.map { it.id to it.name },
+            allLabel = "All ${selectedTab.name.lowercase().replace("live", "channels")}",
             selectedCategoryId = selectedCatId,
             onSelectCategory = viewModel::selectCategory
         )
@@ -89,11 +94,31 @@ fun IptvScreen(
                 onSelectTab = viewModel::selectTab,
                 modifier = Modifier.padding(start = 24.dp, top = 24.dp, end = 24.dp)
             )
+            if (!isTv) {
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        SahraButton(onClick = { viewModel.selectCategory(null) }) {
+                            SahraText("All", color = if (selectedCatId == null) TextPrimary else TextSecondary)
+                        }
+                    }
+                    items(categories, key = { it.id }) { category ->
+                        SahraButton(onClick = { viewModel.selectCategory(category.id) }) {
+                            SahraText(category.name, color = if (selectedCatId == category.id) TextPrimary else TextSecondary)
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
             when {
                 channels.loadState.refresh is LoadState.Loading -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = NebulaCrimson)
+                    }
+                }
+                channels.loadState.refresh is LoadState.Error -> {
+                    Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SahraText("Couldn't load your library.", color = TextSecondary)
+                        SahraButton(onClick = { channels.retry() }) { SahraText("Try again") }
                     }
                 }
                 channels.itemCount == 0 && channels.loadState.refresh is LoadState.NotLoading -> {
@@ -121,7 +146,7 @@ fun IptvScreen(
                                 } else {
                                     StreamCard(
                                         entry = entry,
-                                        onClick = { player.play(entry) }
+                                        onClick = onOpenDetail
                                     )
                                 }
                             }
@@ -136,13 +161,14 @@ fun IptvScreen(
 @Composable
 private fun CategorySidebar(
     categories: List<Pair<String, String>>,
+    allLabel: String,
     selectedCategoryId: String?,
     onSelectCategory: (String?) -> Unit
 ) {
     Box(
         modifier = Modifier
             .widthIn(min = 220.dp, max = 260.dp)
-            .fillMaxSize()
+            .fillMaxHeight()
             .background(AbyssBlue)
     ) {
         LazyColumn(
@@ -151,7 +177,7 @@ private fun CategorySidebar(
         ) {
             item {
                 SidebarItem(
-                    name = "All Channels",
+                    name = allLabel,
                     isSelected = selectedCategoryId == null,
                     onClick = { onSelectCategory(null) }
                 )
@@ -196,7 +222,6 @@ private fun SidebarItem(
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .focusable(interactionSource = interactionSource)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -275,7 +300,6 @@ private fun TabChip(
                 else Modifier
             )
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .focusable(interactionSource = interactionSource)
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)

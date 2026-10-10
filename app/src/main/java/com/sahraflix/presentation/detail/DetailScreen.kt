@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,15 +44,18 @@ import com.sahraflix.presentation.components.SahraButton
 import com.sahraflix.presentation.components.SahraText
 import coil.compose.AsyncImage
 import com.sahraflix.domain.model.ContentDetails
+import com.sahraflix.domain.model.CatalogEntry
+import com.sahraflix.domain.model.StreamType
 import com.sahraflix.domain.model.WatchProvider
 import com.sahraflix.presentation.components.RailTitle
 import com.sahraflix.presentation.components.StreamCard
+import com.sahraflix.presentation.LocalUiEnvironment
 import com.sahraflix.presentation.player.LocalPlayerViewModel
 import com.sahraflix.presentation.theme.DeepShadow
 import com.sahraflix.presentation.theme.SahraGold
 
 @Composable
-fun DetailScreen(viewModel: DetailViewModel = hiltViewModel()) {
+fun DetailScreen(onOpenDetail: (CatalogEntry) -> Unit, onFindSources: (CatalogEntry.Tmdb) -> Unit, viewModel: DetailViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
     Box(Modifier.fillMaxSize()) {
         when (val s = state) {
@@ -59,37 +64,39 @@ fun DetailScreen(viewModel: DetailViewModel = hiltViewModel()) {
                 SahraText(s.message, fontSize = 18.sp, color = Color.White)
                 SahraButton(onClick = viewModel::load) { SahraText("Try again") }
             }
-            is DetailState.Loaded -> DetailContent(s.details)
+            is DetailState.Loaded -> DetailContent(s.details, onOpenDetail, onFindSources)
         }
     }
 }
 
 @Composable
-private fun DetailContent(details: ContentDetails) {
+@OptIn(ExperimentalLayoutApi::class)
+private fun DetailContent(details: ContentDetails, onOpenDetail: (CatalogEntry) -> Unit, onFindSources: (CatalogEntry.Tmdb) -> Unit) {
     val player = LocalPlayerViewModel.current
     val context = LocalContext.current
+    val isTv = LocalUiEnvironment.current.isTv
     Box(Modifier.fillMaxSize()) {
         details.backdropUrl?.let {
             AsyncImage(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = 0.35f)
         }
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(DeepShadow, DeepShadow.copy(alpha = 0.6f), Color.Transparent))))
         LazyColumn(
-            contentPadding = PaddingValues(48.dp),
+            contentPadding = PaddingValues(if (isTv) 48.dp else 16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                    details.posterUrl?.let {
+                    details.posterUrl?.takeIf { isTv }?.let {
                         AsyncImage(it, details.title, Modifier.width(180.dp).height(270.dp), contentScale = ContentScale.Crop)
                     }
-                    Column(Modifier.widthIn(max = 680.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        SahraText(details.title, fontSize = 36.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Column(Modifier.weight(1f).widthIn(max = 680.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SahraText(details.title, fontSize = if (isTv) 36.sp else 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         SahraText(metaLine(details), fontSize = 14.sp, color = Color.Gray)
                         details.description?.let { SahraText(it, maxLines = 6, overflow = TextOverflow.Ellipsis, fontSize = 16.sp, color = Color.LightGray) }
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             when (details) {
                                 is ContentDetails.Iptv -> {
-                                    if (details.seasons.isEmpty()) {
+                                    if (details.entry.stream.streamType != StreamType.SERIES) {
                                         SahraButton(onClick = { player.play(details.entry) }) { SahraText("Play") }
                                         SahraButton(onClick = { player.playFromStart(details.entry) }) { SahraText("From start") }
                                         SahraButton(onClick = { player.toggleFavorite(details.entry) }) { SahraText("Favourite") }
@@ -105,6 +112,9 @@ private fun DetailContent(details: ContentDetails) {
                                     }
                                 }
                                 is ContentDetails.Tmdb -> {
+                                    SahraButton(onClick = { onFindSources(details.entry) }) {
+                                        SahraText(if (details.entry.isSeries) "Choose episode & sources" else "Find streams")
+                                    }
                                     details.libraryMatches.firstOrNull()?.let { match ->
                                         if (!details.entry.isSeries) SahraButton(onClick = { player.play(match) }) { SahraText("Play from your library") }
                                     }
@@ -126,9 +136,14 @@ private fun DetailContent(details: ContentDetails) {
             when (details) {
                 is ContentDetails.Iptv -> {
                     episodes(details, onPlay = { ep -> player.playEpisode(details.entry, ep) })
-                    details.tmdbMatch?.let { tmdbSections(it, skipLibrary = true) }
+                    if (details.entry.stream.streamType == StreamType.SERIES && details.seasons.isEmpty()) {
+                        item { SahraText("No episodes available from this provider yet.", color = Color.LightGray) }
+                    }
+                    details.cast?.let { cast -> item { SahraText("Cast: $cast", color = Color.LightGray) } }
+                    details.director?.let { director -> item { SahraText("Director: $director", color = Color.LightGray) } }
+                    details.tmdbMatch?.let { tmdbSections(it, skipLibrary = true, onOpenDetail) }
                 }
-                is ContentDetails.Tmdb -> tmdbSections(details, skipLibrary = false)
+                is ContentDetails.Tmdb -> tmdbSections(details, skipLibrary = false, onOpenDetail)
             }
         }
     }
@@ -147,7 +162,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.episodes(
 ) {
     if (d.seasons.isEmpty()) return
     item(key = "episodes") {
-        var selected by remember { mutableIntStateOf(d.seasons.keys.min()) }
+        var selected by remember(d.entry.id) { mutableIntStateOf(d.seasons.keys.min()) }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(d.seasons.keys.sorted()) { season ->
@@ -168,7 +183,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.episodes(
     }
 }
 
-private fun LazyListScope.tmdbSections(d: ContentDetails.Tmdb, skipLibrary: Boolean) {
+private fun LazyListScope.tmdbSections(d: ContentDetails.Tmdb, skipLibrary: Boolean, onOpenDetail: (CatalogEntry) -> Unit) {
     if (!skipLibrary && d.libraryMatches.isNotEmpty()) item(key = "lib") {
         val player = LocalPlayerViewModel.current
         Column {
@@ -176,7 +191,7 @@ private fun LazyListScope.tmdbSections(d: ContentDetails.Tmdb, skipLibrary: Bool
             LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(d.libraryMatches, key = { it.id }) { StreamCard(it, onClick = { e ->
                     val iptv = e as com.sahraflix.domain.model.CatalogEntry.Iptv
-                    player.play(iptv)
+                    if (iptv.stream.streamType == StreamType.SERIES) onOpenDetail(iptv) else player.play(iptv)
                 }) }
             }
         }
@@ -219,9 +234,7 @@ private fun LazyListScope.tmdbSections(d: ContentDetails.Tmdb, skipLibrary: Bool
                 items(d.similar, key = { it.id }) { similarItem -> 
                     StreamCard(
                         entry = similarItem, 
-                        onClick = { 
-                            // TODO: Pass navigation handler down to replace current DetailScreen
-                        }
+                        onClick = onOpenDetail
                     ) 
                 }
             }

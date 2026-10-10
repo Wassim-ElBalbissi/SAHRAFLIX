@@ -1,9 +1,9 @@
 package com.sahraflix.di
 
-import com.sahraflix.BuildConfig
 import com.sahraflix.core.AppConfig
 import com.sahraflix.data.remote.TmdbApi
 import com.sahraflix.data.remote.TmdbClient
+import com.sahraflix.data.sources.SourcePreferences
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Module
@@ -12,7 +12,6 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import okhttp3.JavaNetCookieJar
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.net.CookieManager
@@ -49,25 +48,16 @@ object NetworkModule {
                 if (request.header("User-Agent") != null) chain.proceed(request)
                 else chain.proceed(request.newBuilder().header("User-Agent", AppConfig.DEFAULT_USER_AGENT).build())
             }
-            .apply {
-                if (BuildConfig.DEBUG) {
-                    // HEADERS only: BODY would buffer entire multi-MB playlists into memory.
-                    addInterceptor(HttpLoggingInterceptor().apply {
-                        level = HttpLoggingInterceptor.Level.HEADERS
-                        redactHeader("Authorization")
-                        redactHeader("Cookie")
-                    })
-                }
-            }
+            // IPTV and addon URLs can contain credentials. Do not log request URLs or headers.
             .build()
     }
 
     @Provides
     @Singleton
-    fun provideTmdbApi(client: OkHttpClient, moshi: Moshi): TmdbApi {
-        val key = BuildConfig.TMDB_API_KEY.trim()
+    fun provideTmdbApi(client: OkHttpClient, moshi: Moshi, preferences: SourcePreferences): TmdbApi {
         // Accept either a v3 API key or a v4 "API Read Access Token" (JWT, sent as Bearer).
         val tmdbClient = client.newBuilder().addInterceptor { chain ->
+            val key = preferences.tmdbKey
             val req = chain.request()
             val authed = when {
                 key.isEmpty() -> req
@@ -86,5 +76,5 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideTmdbClient(api: TmdbApi): TmdbClient = TmdbClient(api, BuildConfig.TMDB_API_KEY.isNotBlank())
+    fun provideTmdbClient(api: TmdbApi, preferences: SourcePreferences): TmdbClient = TmdbClient(api) { preferences.tmdbKey.isNotBlank() }
 }

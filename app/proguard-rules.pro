@@ -13,3 +13,7 @@
 -dontwarn org.openjsse.**
 # NanoHTTPD
 -keep class fi.iki.elonen.** { *; }
+# The source runtime's JS bridge is called by name from the bundled JavaScript.
+-keepclassmembers class com.sahraflix.data.sources.** {
+    @android.webkit.JavascriptInterface <methods>;
+}

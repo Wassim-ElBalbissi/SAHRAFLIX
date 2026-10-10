@@ -14,7 +14,9 @@ sealed interface ContentDetails {
         val seasons: Map<Int, List<IptvEpisode>> = emptyMap(),
         val rating: Double? = null,
         val releaseYear: Int? = null,
-        val tmdbMatch: Tmdb? = null
+        val tmdbMatch: Tmdb? = null,
+        val cast: String? = null,
+        val director: String? = null
     ) : ContentDetails {
         override val title: String get() = entry.title
         override val posterUrl: String? get() = entry.posterUrl

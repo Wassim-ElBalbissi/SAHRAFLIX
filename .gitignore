@@ -10,3 +10,5 @@ app/build/
 .kotlin/
 *.apk
 tools/test-server/__pycache__/
+build-verification.log
+tools/marquee-sources/node_modules/

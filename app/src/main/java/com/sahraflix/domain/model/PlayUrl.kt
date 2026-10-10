@@ -9,5 +9,9 @@ data class PlayRequest(
     val posterUrl: String? = null,
     val headers: Map<String, String> = emptyMap(),
     val resumePositionMs: Long = 0L,
-    val drm: DrmConfig? = null
+    val drm: DrmConfig? = null,
+    val mimeType: String? = null,
+    val subtitles: List<ExternalSubtitle> = emptyList()
 )
+
+data class ExternalSubtitle(val url: String, val mimeType: String, val language: String?, val label: String)

@@ -1,0 +1,11 @@
+{
+  "name": "sahraflix-marquee-sources",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "npm run build && node --test test/*.test.mjs"
+  },
+  "devDependencies": { "esbuild": "0.25.12" }
+}

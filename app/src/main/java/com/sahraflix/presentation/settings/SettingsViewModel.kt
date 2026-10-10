@@ -29,7 +29,8 @@ enum class UiMode { AUTO, TV, MOBILE }
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val playlists: PlaylistRepository
+    private val playlists: PlaylistRepository,
+    sources: com.sahraflix.data.sources.SourcePreferences
 ) : ViewModel() {
     private val preferences = context.secureUserPreferences()
 
@@ -53,7 +54,7 @@ class SettingsViewModel @Inject constructor(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
-    val tmdbConfigured = BuildConfig.TMDB_API_KEY.isNotBlank()
+    val tmdbConfigured = sources.tmdbConfigured.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), sources.tmdbKey.isNotBlank())
     val demoServerUrl = "http://${BuildConfig.TEST_SERVER_HOST}:8000"
 
     fun addPlaylist(type: PlaylistType, name: String, url: String, user: String, pass: String, mac: String, epg: String, ua: String) {
